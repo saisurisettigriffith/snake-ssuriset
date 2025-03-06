@@ -1,137 +1,163 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Phaser Game - Player Shooting Enemies</title>
-    <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser-arcade-physics.min.js"></script>
+  <meta charset="UTF-8">
+  <title>Phaser Snake Game</title>
+  <!-- Include Phaser -->
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
 </head>
 <body>
+<script>
+class SnakeGame extends Phaser.Scene {
+    constructor() {
+        super({ key: 'SnakeGame' });
+    }
+    
+    preload() {
+        // No assets needed since we'll draw the snake and food with graphics
+    }
+    
+    create() {
+        // Set grid parameters
+        this.cellSize = 20;
+        this.gridWidth = Math.floor(this.game.config.width / this.cellSize);
+        this.gridHeight = Math.floor(this.game.config.height / this.cellSize);
 
-    <script>
-    class Example extends Phaser.Scene
-    {
-        preload ()
-        {
-            this.load.setBaseURL('https://labs.phaser.io');
-            this.load.image('player', 'assets/sprites/player.png');
-            this.load.image('bullet', 'assets/sprites/bullet.png');
-            this.load.image('enemy', 'assets/sprites/ufo.png');
-        }
+        // Initialize snake at the center of the grid
+        this.snake = [];
+        this.snake.push({ x: Math.floor(this.gridWidth / 2), y: Math.floor(this.gridHeight / 2) });
+        this.direction = 'right'; // initial direction
 
-        create ()
-        {
-            this.score = 0;
-            this.scoreText = this.add.text(16, 16, 'Score: 0', { fontSize: '32px', fill: '#000' });
+        // Score display
+        this.score = 0;
+        this.scoreText = this.add.text(16, 16, 'Score: 0', { fontSize: '32px', fill: '#fff' });
 
-            this.player = this.physics.add.sprite(400, 500, 'player');
-            this.player.setBounce(0.2);
-            this.player.setCollideWorldBounds(true);
+        // Place the initial food
+        this.placeFood();
 
-            this.cursors = this.input.keyboard.createCursorKeys();
-            this.shootKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.F);
+        // Set up keyboard input
+        this.cursors = this.input.keyboard.createCursorKeys();
 
-            this.bullets = this.physics.add.group({
-                classType: Phaser.Physics.Arcade.Image,
-                defaultKey: 'bullet',
-                maxSize: 20
-            });
+        // Timer event: move the snake every 150 ms
+        this.time.addEvent({
+            delay: 150,
+            callback: this.moveSnake,
+            callbackScope: this,
+            loop: true
+        });
 
-            this.enemies = this.physics.add.group({
-                key: 'enemy',
-                repeat: 10,
-                setXY: { x: 100, y: 100, stepX: 70 }
-            });
-
-            this.enemies.children.iterate(function (enemy) {
-                enemy.setCollideWorldBounds(true);
-                enemy.setBounce(1);
-                enemy.setVelocity(Phaser.Math.Between(-100, 100), 20);
-            });
-
-            this.physics.add.overlap(this.bullets, this.enemies, this.hitEnemy, null, this);
-            this.physics.add.overlap(this.player, this.enemies, this.playerHit, null, this);
-
-            this.gameOver = false;
-        }
-
-        update ()
-        {
-            if (this.gameOver) {
-                return;
-            }
-
-            this.player.setVelocityX(0);
-
-            if (this.cursors.left.isDown) {
-                this.player.setVelocityX(-230);
-            }
-            if (this.cursors.right.isDown) {
-                this.player.setVelocityX(230);
-            }
-            if (this.cursors.up.isDown && this.player.body.touching.down) {
-                this.player.setVelocityY(-400);
-            }
-
-            if (Phaser.Input.Keyboard.JustDown(this.shootKey)) {
-                const bullet = this.bullets.get(this.player.x, this.player.y);
-
-                if (bullet) {
-                    bullet.setActive(true);
-                    bullet.setVisible(true);
-                    bullet.body.allowGravity = false;
-                    bullet.setVelocityY(-500);
-                }
-            }
-
-            this.bullets.children.each(function(bullet) {
-                if (bullet.active && bullet.y < 0) {
-                    bullet.setActive(false);
-                    bullet.setVisible(false);
-                }
-            }, this);
-        }
-
-        hitEnemy (bullet, enemy)
-        {
-            bullet.setActive(false);
-            bullet.setVisible(false);
-
-            enemy.disableBody(true, true);
-
-            this.score += 10;
-            this.scoreText.setText('Score: ' + this.score);
-        }
-
-        playerHit (player, enemy)
-        {
-            this.physics.pause();
-
-            player.setTint(0xff0000);
-
-            this.gameOver = true;
-
-            this.time.delayedCall(1000, () => {
-                this.scene.restart();
-            }, [], this);
+        // Graphics object for drawing the snake and food
+        this.graphics = this.add.graphics();
+    }
+    
+    update() {
+        // Update the snake’s direction based on input.
+        // Prevent reverse direction to avoid immediate self-collision.
+        if (this.cursors.left.isDown && this.direction !== 'right') {
+            this.direction = 'left';
+        } else if (this.cursors.right.isDown && this.direction !== 'left') {
+            this.direction = 'right';
+        } else if (this.cursors.up.isDown && this.direction !== 'down') {
+            this.direction = 'up';
+        } else if (this.cursors.down.isDown && this.direction !== 'up') {
+            this.direction = 'down';
         }
     }
+    
+    moveSnake() {
+        // Determine the new head position
+        let head = this.snake[0];
+        let newHead = { x: head.x, y: head.y };
 
-    const config = {
-        type: Phaser.AUTO,
-        width: window.innerWidth,
-        height: window.innerHeight - 2,
-        backgroundColor: '#ffffff',
-        physics: {
-            default: 'arcade',
-            arcade: {
-                gravity: { y: 700 },
-                debug: false
+        if (this.direction === 'left') {
+            newHead.x--;
+        } else if (this.direction === 'right') {
+            newHead.x++;
+        } else if (this.direction === 'up') {
+            newHead.y--;
+        } else if (this.direction === 'down') {
+            newHead.y++;
+        }
+
+        // Check for collision with walls
+        if (newHead.x < 0 || newHead.x >= this.gridWidth || newHead.y < 0 || newHead.y >= this.gridHeight) {
+            this.gameOver();
+            return;
+        }
+
+        // Check for collision with itself
+        for (let segment of this.snake) {
+            if (segment.x === newHead.x && segment.y === newHead.y) {
+                this.gameOver();
+                return;
             }
-        },
-        scene: Example
-    };
+        }
 
-    const game = new Phaser.Game(config);
-    </script>
+        // Add new head position
+        this.snake.unshift(newHead);
 
+        // If the snake eats the food
+        if (newHead.x === this.food.x && newHead.y === this.food.y) {
+            this.score += 10;
+            this.scoreText.setText('Score: ' + this.score);
+            this.placeFood();
+        } else {
+            // Remove the tail segment if no food was eaten
+            this.snake.pop();
+        }
+
+        // Redraw the game
+        this.draw();
+    }
+    
+    draw() {
+        // Clear previous drawings
+        this.graphics.clear();
+
+        // Draw snake segments in green
+        this.graphics.fillStyle(0x00ff00, 1);
+        for (let segment of this.snake) {
+            this.graphics.fillRect(segment.x * this.cellSize, segment.y * this.cellSize, this.cellSize - 1, this.cellSize - 1);
+        }
+
+        // Draw the food in red
+        this.graphics.fillStyle(0xff0000, 1);
+        this.graphics.fillRect(this.food.x * this.cellSize, this.food.y * this.cellSize, this.cellSize - 1, this.cellSize - 1);
+    }
+    
+    placeFood() {
+        let valid = false;
+        let foodX, foodY;
+        // Keep trying until a cell is found that's not occupied by the snake
+        while (!valid) {
+            foodX = Phaser.Math.Between(0, this.gridWidth - 1);
+            foodY = Phaser.Math.Between(0, this.gridHeight - 1);
+            valid = true;
+            for (let segment of this.snake) {
+                if (segment.x === foodX && segment.y === foodY) {
+                    valid = false;
+                    break;
+                }
+            }
+        }
+        this.food = { x: foodX, y: foodY };
+    }
+    
+    gameOver() {
+        // Restart the scene when the game is over
+        this.scene.restart();
+    }
+}
+
+const config = {
+    type: Phaser.AUTO,
+    width: window.innerWidth,
+    height: window.innerHeight - 2,
+    backgroundColor: '#000000',
+    scene: SnakeGame
+};
+
+const game = new Phaser.Game(config);
+</script>
 </body>
 </html>
